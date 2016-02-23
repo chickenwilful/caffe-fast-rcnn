@@ -79,16 +79,18 @@ void PoolingBatchLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
 }
 
 template <typename Dtype>
-void PoolingLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& org_bottom,
+void PoolingBatchLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& org_bottom,
       const vector<Blob<Dtype>*>& top) {
 
   // swap channels (N, C, H, W) --> (C, H, N, W)
-  vector<Blob<Dtype>*> bottom(
-    bottom[0] -> channels(),
-    bottom[0] -> height(),
-    bottom[0] -> num(),
-    bottom[0] -> width()
-  )
+  vector<Blob<Dtype>*> bottom; bottom.clear();
+
+  bottom.push_back(new Blob<Dtype>(
+    org_bottom[0] -> channels(),
+    org_bottom[0] -> height(),
+    org_bottom[0] -> num(),
+    org_bottom[0] -> width()
+  ));
 
   CHECK_EQ(4, bottom[0]->num_axes()) << "Input must have 4 axes, "
       << "corresponding to (num, channels, height, width)";
@@ -137,22 +139,27 @@ void PoolingLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& org_bottom,
 // TODO(Yangqing): Is there a faster way to do pooling in the channel-first
 // case?
 template <typename Dtype>
-void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& org_bottom,
+void PoolingBatchLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& org_bottom,
       const vector<Blob<Dtype>*>& top) {
 
-  vector<Blob<Dtype>*> bottom(
-    bottom[0] -> channels(),
-    bottom[0] -> height(),
-    bottom[0] -> num(),
-    bottom[0] -> width()
-  )
-  Dtype* swap_bottom_data = org_bottom[0] -> cpu_data();
+  vector<Blob<Dtype>*> bottom; bottom.clear();
+  bottom.push_back( new Blob<Dtype>(
+    org_bottom[0] -> channels(),
+    org_bottom[0] -> height(),
+    org_bottom[0] -> num(),
+    org_bottom[0] -> width()
+  ));
+  const Dtype* org_bottom_data = org_bottom[0] -> cpu_data();
+  Dtype* swap_bottom_data = bottom[0] -> mutable_cpu_data();
   // fill bottom data based on swap channels
+  // swap channels (N, C, H, W) --> (C, H, N, W)  
   for (int n = 0; n < bottom[0] -> num(); ++n) {
     for(int c = 0; c < channels_; ++c)
-      for(int h = 0; h < bottom[0])
+      for(int h = 0; h < height_; ++h)
+        for(int w = 0; w < width_; ++w)
+          swap_bottom_data[bottom[0] -> offset(c, h, n, w)] 
+            = org_bottom_data[org_bottom[0] -> offset(n, c, h, w)];
   }
-
 
   const Dtype* bottom_data = bottom[0]->cpu_data();
   Dtype* top_data = top[0]->mutable_cpu_data();
@@ -254,7 +261,7 @@ void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& org_bottom,
 }
 
 template <typename Dtype>
-void PoolingLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
+void PoolingBatchLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
   if (!propagate_down[0]) {
     return;
@@ -335,9 +342,9 @@ void PoolingLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
 
 
 #ifdef CPU_ONLY
-STUB_GPU(PoolingLayer);
+STUB_GPU(PoolingBatchLayer);
 #endif
 
-INSTANTIATE_CLASS(PoolingLayer);
+INSTANTIATE_CLASS(PoolingBatchLayer);
 
 }  // namespace caffe
