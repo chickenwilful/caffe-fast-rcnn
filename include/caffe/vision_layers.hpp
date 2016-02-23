@@ -463,12 +463,12 @@ class PoolingBatchLayer : public Layer<Dtype> {
  public:
   explicit PoolingBatchLayer(const LayerParameter& param)
       : Layer<Dtype>(param) {}
-  virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
+  virtual void LayerSetUp(const vector<Blob<Dtype>*>& org_bottom,
       const vector<Blob<Dtype>*>& top);
-  virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
+  virtual void Reshape(const vector<Blob<Dtype>*>& org_bottom,
       const vector<Blob<Dtype>*>& top);
 
-  virtual inline const char* type() const { return "Pooling"; }
+  virtual inline const char* type() const { return "PoolingBatch"; }
   virtual inline int ExactNumBottomBlobs() const { return 1; }
   virtual inline int MinTopBlobs() const { return 1; }
   // MAX POOL layers can output an extra top blob for the mask;
@@ -479,14 +479,14 @@ class PoolingBatchLayer : public Layer<Dtype> {
   }
 
  protected:
-  virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
+  virtual void Forward_cpu(const vector<Blob<Dtype>*>& org_bottom,
       const vector<Blob<Dtype>*>& top);
-  virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
+  virtual void Forward_gpu(const vector<Blob<Dtype>*>& org_bottom,
       const vector<Blob<Dtype>*>& top);
   virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
-      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& org_bottom);
   virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
-      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& org_bottom);
 
   int kernel_h_, kernel_w_;
   int stride_h_, stride_w_;
@@ -496,6 +496,7 @@ class PoolingBatchLayer : public Layer<Dtype> {
   int pooled_height_, pooled_width_;
   bool global_pooling_;
   Blob<Dtype> rand_idx_;
+  vector<Blob<Dtype>*> bottom;
   Blob<int> max_idx_;
 };
 

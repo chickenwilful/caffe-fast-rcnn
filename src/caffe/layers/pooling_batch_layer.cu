@@ -158,26 +158,6 @@ __global__ void StoPoolForwardTest(const int nthreads,
 template <typename Dtype>
 void PoolingBatchLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& org_bottom,
       const vector<Blob<Dtype>*>& top) {
-
-  vector<Blob<Dtype>*> bottom; bottom.clear();
-  bottom.push_back(new Blob<Dtype>(
-    bottom[0] -> channels(),
-    bottom[0] -> height(),
-    bottom[0] -> num(),
-    bottom[0] -> width()
-  ));
-  const Dtype* org_bottom_data = org_bottom[0] -> gpu_data();
-  Dtype* swap_bottom_data = bottom[0] -> mutable_gpu_data();
-  // fill bottom data based on swap channels
-  // swap channels (N, C, H, W) --> (C, H, N, W)  
-  for (int n = 0; n < bottom[0] -> num(); ++n) {
-    for(int c = 0; c < channels_; ++c)
-      for(int h = 0; h < height_; ++h)
-        for(int w = 0; w < width_; ++w)
-          swap_bottom_data[bottom[0]-> offset(c, h, n, w)] 
-            = org_bottom_data[org_bottom[0] -> offset(n, c, h, w)];
-  }
-
   const Dtype* bottom_data = bottom[0]->gpu_data();
   Dtype* top_data = top[0]->mutable_gpu_data();
   int count = top[0]->count();
@@ -279,7 +259,8 @@ __global__ void MaxPoolBackward(const int nthreads, const Dtype* const top_diff,
       }
     }
 
-    int temp = n; n = h; h = c; c = temp;
+    int temp = n; n = w; w = temp; 
+    temp = c; c = h; h = temp;
     const int org_index = n * (c * h * w) + (c * h * w) + (h * w) + w;
     bottom_diff[org_index] = gradient;
   }
@@ -358,13 +339,13 @@ __global__ void StoPoolBackward(const int nthreads,
 
 template <typename Dtype>
 void PoolingBatchLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
-      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& org_bottom) {
   if (!propagate_down[0]) {
     return;
   }
   const Dtype* top_diff = top[0]->gpu_diff();
-  Dtype* bottom_diff = bottom[0]->mutable_gpu_diff();
-  const int count = bottom[0]->count();
+  Dtype* bottom_diff = org_bottom[0]->mutable_gpu_diff();
+  const int count = org_bottom[0]->count();
   caffe_gpu_set(count, Dtype(0.), bottom_diff);
   // We'll output the mask to top[1] if it's of size >1.
   const bool use_top_mask = top.size() > 1;
@@ -402,6 +383,7 @@ void PoolingBatchLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
   default:
     LOG(FATAL) << "Unknown pooling method.";
   }
+  LOG(FATAL) << "here";
   CUDA_POST_KERNEL_CHECK;
 }
 

@@ -1,17 +1,20 @@
 #include <algorithm>
 #include <cfloat>
 #include <vector>
+#include <iostream>
 
 #include "caffe/common.hpp"
 #include "caffe/layer.hpp"
 #include "caffe/syncedmem.hpp"
 #include "caffe/util/math_functions.hpp"
 #include "caffe/vision_layers.hpp"
+#include <iostream>
 
 namespace caffe {
 
 using std::min;
 using std::max;
+using std::cout;
 
 template <typename Dtype>
 void PoolingBatchLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
@@ -82,15 +85,23 @@ template <typename Dtype>
 void PoolingBatchLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& org_bottom,
       const vector<Blob<Dtype>*>& top) {
 
-  // swap channels (N, C, H, W) --> (C, H, N, W)
-  vector<Blob<Dtype>*> bottom; bottom.clear();
-
+  bottom.clear();
   bottom.push_back(new Blob<Dtype>(
-    org_bottom[0] -> channels(),
+    org_bottom[0] -> width(),
     org_bottom[0] -> height(),
-    org_bottom[0] -> num(),
-    org_bottom[0] -> width()
+    org_bottom[0] -> channels(),
+    org_bottom[0] -> num()
   ));
+  const Dtype* org_bottom_data = org_bottom[0] -> cpu_data();
+  Dtype* swap_bottom_data = bottom[0] -> mutable_cpu_data();
+  // fill bottom data based on swap channels
+  for (int n = 0; n < bottom[0] -> num(); ++n) {
+    for(int c = 0; c < bottom[0] -> channels(); ++c)
+      for(int h = 0; h < bottom[0] -> height(); ++h)
+        for(int w = 0; w < bottom[0] -> width(); ++w)
+          swap_bottom_data[bottom[0]-> offset(n, c, h, w)] 
+            = org_bottom_data[org_bottom[0] -> offset(w, h, c, n)];
+  }
 
   CHECK_EQ(4, bottom[0]->num_axes()) << "Input must have 4 axes, "
       << "corresponding to (num, channels, height, width)";
@@ -105,7 +116,8 @@ void PoolingBatchLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& org_bottom,
       height_ + 2 * pad_h_ - kernel_h_) / stride_h_)) + 1;
   pooled_width_ = static_cast<int>(ceil(static_cast<float>(
       width_ + 2 * pad_w_ - kernel_w_) / stride_w_)) + 1;
-  if (pad_h_ || pad_w_) {
+
+  if (pad_h_ || pad_w_) { 
     // If we have padding, ensure that the last pooling starts strictly
     // inside the image (instead of at the padding); otherwise clip the last.
     if ((pooled_height_ - 1) * stride_h_ >= height_ + pad_h_) {
@@ -117,11 +129,15 @@ void PoolingBatchLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& org_bottom,
     CHECK_LT((pooled_height_ - 1) * stride_h_, height_ + pad_h_);
     CHECK_LT((pooled_width_ - 1) * stride_w_, width_ + pad_w_);
   }
+
+  // TODO: remove hardcode here
+  pooled_width_ = 1;
   top[0]->Reshape(bottom[0]->num(), channels_, pooled_height_,
       pooled_width_);
   if (top.size() > 1) {
     top[1]->ReshapeLike(*top[0]);
   }
+  
   // If max pooling, we will initialize the vector index part.
   if (this->layer_param_.pooling_param().pool() ==
       PoolingParameter_PoolMethod_MAX && top.size() == 1) {
@@ -142,25 +158,7 @@ template <typename Dtype>
 void PoolingBatchLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& org_bottom,
       const vector<Blob<Dtype>*>& top) {
 
-  vector<Blob<Dtype>*> bottom; bottom.clear();
-  bottom.push_back( new Blob<Dtype>(
-    org_bottom[0] -> channels(),
-    org_bottom[0] -> height(),
-    org_bottom[0] -> num(),
-    org_bottom[0] -> width()
-  ));
-  const Dtype* org_bottom_data = org_bottom[0] -> cpu_data();
-  Dtype* swap_bottom_data = bottom[0] -> mutable_cpu_data();
-  // fill bottom data based on swap channels
-  // swap channels (N, C, H, W) --> (C, H, N, W)  
-  for (int n = 0; n < bottom[0] -> num(); ++n) {
-    for(int c = 0; c < channels_; ++c)
-      for(int h = 0; h < height_; ++h)
-        for(int w = 0; w < width_; ++w)
-          swap_bottom_data[bottom[0] -> offset(c, h, n, w)] 
-            = org_bottom_data[org_bottom[0] -> offset(n, c, h, w)];
-  }
-
+  CHECK_LT(1,  0);
   const Dtype* bottom_data = bottom[0]->cpu_data();
   Dtype* top_data = top[0]->mutable_cpu_data();
   const int top_count = top[0]->count();
@@ -290,6 +288,7 @@ void PoolingBatchLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
             const int index = ph * pooled_width_ + pw;
             const int bottom_index =
                 use_top_mask ? top_mask[index] : mask[index];
+            // TODO: change bottom_index
             bottom_diff[bottom_index] += top_diff[index];
           }
         }
