@@ -242,7 +242,7 @@ void PoolingBatchLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
   // Different pooling methods. We explicitly do the switch outside the for
   // loop to save time, although this results in more codes.
   caffe_set(bottom[0]->count(), Dtype(0), bottom_diff);
-  caffe_set(org_bottom[0]->count(), Dtype(0), org_bottom_diff);
+  caffe_set(bottom[0]->count(), Dtype(0), org_bottom_diff);
   // We'll output the mask to top[1] if it's of size >1.
   const bool use_top_mask = top.size() > 1;
   const int* mask = NULL;  // suppress warnings about uninitialized variables
@@ -278,8 +278,16 @@ void PoolingBatchLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     for(int n = 0; n < bottom[0]->num(); ++n)
       for(int c = 0; c < channels_; ++c)
         for(int h = 0; h < height_; ++h)
-          for(int w = 0; w < width_; ++w)
-            org_bottom_diff[org_bottom[0]->offset(w, h, c, n)] = bottom_diff[bottom[0]->offset(n, c, h, w)];
+          for(int w = 0; w < width_; ++w) {
+            org_bottom_diff[org_bottom[0]->offset(w, h, c, n)] = bottom[0]->diff_at(n, c, h, w);
+          }
+
+    for(int n = 0; n < bottom[0]->num(); ++n)
+      for(int c = 0; c < channels_; ++c)
+        for(int h = 0; h < height_; ++h)
+          for(int w = 0; w < width_; ++w) if (bottom_diff[bottom[0]->offset(n, c, h, w)] != 0) {
+            CHECK_EQ(org_bottom[0]->diff_at(w, h, c, n) , bottom[0]->diff_at(n, c, h, w));
+          }
     break;
   case PoolingParameter_PoolMethod_AVE:
     NOT_IMPLEMENTED;
