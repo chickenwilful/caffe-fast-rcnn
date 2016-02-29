@@ -259,9 +259,7 @@ __global__ void MaxPoolBackward(const int nthreads, const Dtype* const top_diff,
       }
     }
 
-    int temp = n; n = w; w = temp; 
-    temp = c; c = h; h = temp;
-    const int org_index = n * (c * h * w) + (c * h * w) + (h * w) + w;
+    const int org_index = w * height * channels * num + h * channels * n + c * num + n;
     bottom_diff[org_index] = gradient;
   }
 }
@@ -359,11 +357,11 @@ void PoolingBatchLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
       mask = max_idx_.gpu_data();
     }
     // NOLINT_NEXT_LINE(whitespace/operators)
-    MaxPoolBackward<Dtype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
-        count, top_diff, mask, top_mask, top[0]->num(), channels_,
-        height_, width_, pooled_height_, pooled_width_,
-        kernel_h_, kernel_w_, stride_h_, stride_w_, pad_h_, pad_w_,
-        bottom_diff);
+   MaxPoolBackward<Dtype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
+       count, top_diff, mask, top_mask, top[0]->num(), channels_,
+       height_, width_, pooled_height_, pooled_width_,
+       kernel_h_, kernel_w_, stride_h_, stride_w_, pad_h_, pad_w_,
+       bottom_diff);
     break;
   case PoolingParameter_PoolMethod_AVE:
     // NOLINT_NEXT_LINE(whitespace/operators)
@@ -383,7 +381,6 @@ void PoolingBatchLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
   default:
     LOG(FATAL) << "Unknown pooling method.";
   }
-  LOG(FATAL) << "here";
   CUDA_POST_KERNEL_CHECK;
 }
 

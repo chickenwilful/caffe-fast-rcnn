@@ -76,7 +76,7 @@ shared_ptr<Layer<Dtype> > GetPoolingBatchLayer(const LayerParameter& param) {
   if (engine == PoolingParameter_Engine_DEFAULT) {
     engine = PoolingParameter_Engine_CAFFE;
 #ifdef USE_CUDNN
-    engine = PoolingParameter_Engine_CUDNN;
+    LOG(FATAL) << "No engine for PoolingParameter_Engine_CUDNN"
 #endif
   }
   if (engine == PoolingParameter_Engine_CAFFE) {
