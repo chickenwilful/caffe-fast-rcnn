@@ -259,7 +259,7 @@ __global__ void MaxPoolBackward(const int nthreads, const Dtype* const top_diff,
       }
     }
 
-    const int org_index = w * height * channels * num + h * channels * n + c * num + n;
+    const int org_index = w * height * channels * num + h * channels * num + c * num + n;
     bottom_diff[org_index] = gradient;
   }
 }

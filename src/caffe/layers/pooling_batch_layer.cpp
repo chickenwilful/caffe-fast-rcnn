@@ -274,19 +274,11 @@ void PoolingBatchLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
         }
       }
     }
-
     for(int n = 0; n < bottom[0]->num(); ++n)
       for(int c = 0; c < channels_; ++c)
         for(int h = 0; h < height_; ++h)
           for(int w = 0; w < width_; ++w) {
             org_bottom_diff[org_bottom[0]->offset(w, h, c, n)] = bottom[0]->diff_at(n, c, h, w);
-          }
-
-    for(int n = 0; n < bottom[0]->num(); ++n)
-      for(int c = 0; c < channels_; ++c)
-        for(int h = 0; h < height_; ++h)
-          for(int w = 0; w < width_; ++w) if (bottom_diff[bottom[0]->offset(n, c, h, w)] != 0) {
-            CHECK_EQ(org_bottom[0]->diff_at(w, h, c, n) , bottom[0]->diff_at(n, c, h, w));
           }
     break;
   case PoolingParameter_PoolMethod_AVE:
