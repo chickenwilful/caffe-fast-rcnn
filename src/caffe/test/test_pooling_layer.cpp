@@ -367,7 +367,143 @@ class PoolingLayerTest : public MultiDeviceTest<TypeParam> {
     }
   }
 
- void TestForwardBatch() {
+  void TestBackwardBatch1() {
+    LayerParameter layer_param;
+    PoolingParameter *pooling_param = layer_param.mutable_pooling_param();
+    pooling_param -> set_kernel_h(1);
+    pooling_param -> set_kernel_w(1);
+    pooling_param -> set_batch_pooling(true);
+
+    FillerParameter filler_param;
+    GaussianFiller<Dtype> filler(filler_param);
+
+    for (int num = 2; num < 5; ++num) {
+      for(int channels = 5; channels < 10; ++channels) {
+        blob_bottom_ -> Reshape(num, channels, 1, 1);
+        filler.Fill(this->blob_bottom_);
+        
+        PoolingLayer<Dtype> layer(layer_param);
+        layer.SetUp(blob_bottom_vec_, blob_top_vec_);
+        EXPECT_EQ(blob_top_->num(), 1);
+        EXPECT_EQ(blob_top_->channels(), 1);
+        EXPECT_EQ(blob_top_->height(), channels);
+        EXPECT_EQ(blob_top_->width(), 1);
+        layer.Forward(blob_bottom_vec_, blob_top_vec_);
+
+        Dtype *m_top_diff = blob_top_->mutable_cpu_diff();
+        for(int i = 0; i < blob_top_->count(); i++)
+          m_top_diff[i] = rand() % 100;
+
+        vector<bool> propagate_down(blob_bottom_vec_.size(), true);
+        layer.Backward(blob_top_vec_, propagate_down, blob_bottom_vec_);
+
+        const Dtype* bottom_data = blob_bottom_->cpu_data();
+        const Dtype* bottom_diff = blob_bottom_->cpu_diff();
+        const Dtype* top_diff = blob_top_->cpu_diff();
+        for(int i = 0; i < blob_bottom_->channels(); ++i) {
+          int maxId = 0;
+          for(int j = 1; j < blob_bottom_->num(); ++j) {
+            if (bottom_data[j] > bottom_data[maxId]) maxId = j;
+          }
+          CHECK_EQ(bottom_diff[maxId], top_diff[i]);
+          bottom_data += blob_bottom_ -> num();
+          bottom_diff += blob_bottom_ -> num();
+        }
+      }
+    }
+  }
+
+  void TestForwardBatch1() {
+    LayerParameter layer_param;
+    PoolingParameter *pooling_param = layer_param.mutable_pooling_param();
+    pooling_param -> set_kernel_h(1);
+    pooling_param -> set_kernel_w(1);
+    pooling_param -> set_batch_pooling(true);
+
+    FillerParameter filler_param;
+    GaussianFiller<Dtype> filler(filler_param);
+
+    for (int num = 2; num < 5; ++num) {
+      for(int channels = 5; channels < 10; ++channels) {
+        blob_bottom_ -> Reshape(num, channels, 1, 1);
+        filler.Fill(this->blob_bottom_);
+        
+        PoolingLayer<Dtype> layer(layer_param);
+        layer.SetUp(blob_bottom_vec_, blob_top_vec_);
+        EXPECT_EQ(blob_top_->num(), 1);
+        EXPECT_EQ(blob_top_->channels(), 1);
+        EXPECT_EQ(blob_top_->height(), channels);
+        EXPECT_EQ(blob_top_->width(), 1);
+        layer.Forward(blob_bottom_vec_, blob_top_vec_);
+
+        const Dtype* bottom_data = blob_bottom_->cpu_data();
+        const Dtype* top_data = blob_top_->cpu_data();
+        for(int i = 0; i < blob_bottom_->channels(); ++i) {
+          int maxId = 0;
+          for(int j = 1; j < blob_bottom_->num(); ++j) {
+            if (bottom_data[j] > bottom_data[maxId]) maxId = j;
+          }
+          CHECK_EQ(bottom_data[maxId], top_data[i]);
+          bottom_data += blob_bottom_ -> num();
+        }
+      }
+    }
+  }
+
+  void TestBackwardBatch() {
+    LayerParameter layer_param;
+    PoolingParameter *pooling_param = layer_param.mutable_pooling_param();
+    pooling_param -> set_kernel_h(1);
+    pooling_param -> set_kernel_w(1);
+    pooling_param -> set_batch_pooling(true);
+
+    const int num = 2;
+    const int channels = 5;
+    blob_bottom_ -> Reshape(num, channels, 1, 1);
+    //Input: [1 2 3 4 5]
+    //       [4 1 2 6 2]
+    vector<int> data; data.clear();
+    data.push_back(1);
+    data.push_back(2);
+    data.push_back(3);
+    data.push_back(4);
+    data.push_back(5);
+    data.push_back(4);
+    data.push_back(1);
+    data.push_back(2);
+    data.push_back(6);
+    data.push_back(2);
+    for(int i = 0; i < 10; i++)
+      blob_bottom_ -> mutable_cpu_data()[i] = data[i];
+
+    PoolingLayer<Dtype> layer(layer_param);
+    layer.SetUp(blob_bottom_vec_, blob_top_vec_);
+    layer.Forward(blob_bottom_vec_, blob_top_vec_);
+
+    Dtype *m_top_diff = blob_top_->mutable_cpu_diff();
+    for(int i = 0; i < blob_top_->count(); i++)
+      m_top_diff[i] = rand() % 100;
+
+    vector<bool> propagate_down(blob_bottom_vec_.size(), true);
+    layer.Backward(blob_top_vec_, propagate_down, blob_bottom_vec_);
+
+    data.clear();
+    data.push_back(0);
+    data.push_back(m_top_diff[1]);
+    data.push_back(m_top_diff[2]);
+    data.push_back(0);
+    data.push_back(m_top_diff[4]);
+    data.push_back(m_top_diff[0]);
+    data.push_back(0);
+    data.push_back(0);
+    data.push_back(m_top_diff[3]);
+    data.push_back(0);
+
+    for(int i = 0; i < 10; i++)
+      CHECK_EQ(blob_bottom_->cpu_diff()[i], data[i]);
+  }
+
+  void TestForwardBatch() {
   // Test for 2 x 5 x 1 x 1 input
     LayerParameter layer_param;
     PoolingParameter *pooling_param = layer_param.mutable_pooling_param();
@@ -683,6 +819,11 @@ TYPED_TEST(PoolingLayerTest, TestSetupBatchPooling) {
 
 TYPED_TEST(PoolingLayerTest, TestBatchForwardMax) {
   this->TestForwardBatch();
+  // this->TestForwardBatch1();
+}
+
+TYPED_TEST(PoolingLayerTest, TestBatchBackwardMax) {
+  this->TestBackwardBatch();
 }
 
 TYPED_TEST(PoolingLayerTest, TestBatchGradientMax) {
