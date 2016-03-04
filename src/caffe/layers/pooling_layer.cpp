@@ -87,6 +87,10 @@ void PoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
 template <typename Dtype>
 void PoolingLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
+
+  if (bottom[0]->num_axes() == 2)
+    bottom[0] -> Reshape(bottom[0]->num(), bottom[0]->channels(), 1, 1);
+
   CHECK_EQ(4, bottom[0]->num_axes()) << "Input must have 4 axes, "
       << "corresponding to (num, channels, height, width)";
 

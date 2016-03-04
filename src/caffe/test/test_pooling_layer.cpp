@@ -396,18 +396,17 @@ class PoolingLayerTest : public MultiDeviceTest<TypeParam> {
 
         vector<bool> propagate_down(blob_bottom_vec_.size(), true);
         layer.Backward(blob_top_vec_, propagate_down, blob_bottom_vec_);
-
         const Dtype* bottom_data = blob_bottom_->cpu_data();
+        const Dtype* top_data = blob_top_->cpu_data();
         const Dtype* bottom_diff = blob_bottom_->cpu_diff();
         const Dtype* top_diff = blob_top_->cpu_diff();
-        for(int i = 0; i < blob_bottom_->channels(); ++i) {
-          int maxId = 0;
-          for(int j = 1; j < blob_bottom_->num(); ++j) {
-            if (bottom_data[j] > bottom_data[maxId]) maxId = j;
-          }
-          CHECK_EQ(bottom_diff[maxId], top_diff[i]);
-          bottom_data += blob_bottom_ -> num();
-          bottom_diff += blob_bottom_ -> num();
+
+        for(int c = 0; c < channels; ++c) {
+          for(int n = 0; n < num; ++n) 
+            if (bottom_data[channels * n + c] == top_data[c]) {
+              EXPECT_EQ(bottom_diff[channels * n + c], top_diff[c]);
+              break;
+            }
         }
       }
     }
@@ -438,13 +437,9 @@ class PoolingLayerTest : public MultiDeviceTest<TypeParam> {
 
         const Dtype* bottom_data = blob_bottom_->cpu_data();
         const Dtype* top_data = blob_top_->cpu_data();
-        for(int i = 0; i < blob_bottom_->channels(); ++i) {
-          int maxId = 0;
-          for(int j = 1; j < blob_bottom_->num(); ++j) {
-            if (bottom_data[j] > bottom_data[maxId]) maxId = j;
-          }
-          CHECK_EQ(bottom_data[maxId], top_data[i]);
-          bottom_data += blob_bottom_ -> num();
+        for(int c = 0; c < channels; ++c) {
+          for(int n = 0; n < num; ++n)
+            EXPECT_LE(bottom_data[channels * n + c], top_data[c]);
         }
       }
     }
@@ -819,11 +814,12 @@ TYPED_TEST(PoolingLayerTest, TestSetupBatchPooling) {
 
 TYPED_TEST(PoolingLayerTest, TestBatchForwardMax) {
   this->TestForwardBatch();
-  // this->TestForwardBatch1();
+  this->TestForwardBatch1();
 }
 
 TYPED_TEST(PoolingLayerTest, TestBatchBackwardMax) {
   this->TestBackwardBatch();
+  this->TestBackwardBatch1();
 }
 
 TYPED_TEST(PoolingLayerTest, TestBatchGradientMax) {
