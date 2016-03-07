@@ -149,10 +149,35 @@ __global__ void StoPoolForwardTest(const int nthreads,
   }
 }
 
+template <typename Dtype>
+__global__ void SwapBottom(const int nthreads, 
+  const Dtype* bottom_data, const int num, int channels, int height, int width,
+  Dtype* swap_bottom_data) {
+  CUDA_KERNEL_LOOP(index, nthreads) {
+    int w = index % width;
+    int h = (index / width) % height;
+    int c = (index / width / height) % channels;
+    int n = index / width / height / channels;
+
+    int org_index = w * height * channels * num + h * channels * num + c * num + n;
+    swap_bottom_data[index] = bottom_data[org_index];
+  }
+}
+
 
 template <typename Dtype>
 void PoolingLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
+
+  if (batch_pooling_) {
+    int count = swap_bottom.count();
+    const Dtype* org_bottom_data = bottom[0]->gpu_data();
+    Dtype* swap_bottom_data = swap_bottom.mutable_gpu_data();
+
+    SwapBottom<Dtype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
+        count, org_bottom_data, swap_bottom.num(), channels_, height_, width_, swap_bottom_data);
+  }
+
   const Dtype* bottom_data = batch_pooling_? swap_bottom.gpu_data() : bottom[0]->gpu_data();
   Dtype* top_data = top[0]->mutable_gpu_data();
   int count = top[0]->count();

@@ -405,7 +405,8 @@ class PoolingLayerTest : public MultiDeviceTest<TypeParam> {
           for(int n = 0; n < num; ++n) 
             if (bottom_data[channels * n + c] == top_data[c]) {
               EXPECT_EQ(bottom_diff[channels * n + c], top_diff[c]);
-              break;
+            } else {
+              EXPECT_EQ(bottom_diff[channels * n + c], 0);
             }
         }
       }
@@ -495,7 +496,7 @@ class PoolingLayerTest : public MultiDeviceTest<TypeParam> {
     data.push_back(0);
 
     for(int i = 0; i < 10; i++)
-      CHECK_EQ(blob_bottom_->cpu_diff()[i], data[i]);
+      EXPECT_EQ(blob_bottom_->cpu_diff()[i], data[i]);
   }
 
   void TestForwardBatch() {
@@ -824,18 +825,19 @@ TYPED_TEST(PoolingLayerTest, TestBatchBackwardMax) {
 
 TYPED_TEST(PoolingLayerTest, TestBatchGradientMax) {
   typedef typename TypeParam::Dtype Dtype;
-  for (int kernel_h = 1; kernel_h <= 1; kernel_h++) {
-    for (int kernel_w = 1; kernel_w <= 1; kernel_w++) {
-      LayerParameter layer_param;
-      PoolingParameter* pooling_param = layer_param.mutable_pooling_param();
-      pooling_param->set_kernel_h(kernel_h);
-      pooling_param->set_kernel_w(kernel_w);
-      pooling_param->set_pool(PoolingParameter_PoolMethod_MAX);
-      pooling_param->set_batch_pooling(true);
-      PoolingLayer<Dtype> layer(layer_param);
-      GradientChecker<Dtype> checker(1e-4, 1e-2);
 
-      this->blob_bottom_->Reshape(10, 21, 1, 1);
+  LayerParameter layer_param;
+  PoolingParameter* pooling_param = layer_param.mutable_pooling_param();
+  pooling_param->set_kernel_h(1);
+  pooling_param->set_kernel_w(1);
+  pooling_param->set_pool(PoolingParameter_PoolMethod_MAX);
+  pooling_param->set_batch_pooling(true);
+  PoolingLayer<Dtype> layer(layer_param);
+  GradientChecker<Dtype> checker(1e-4, 1e-2);
+
+  for(int num = 2; num < 10; ++num)
+    for(int channels = 5; channels < 15; ++channels) {
+      this->blob_bottom_ -> Reshape(num, channels, 1, 1);
       // fill the values
       FillerParameter filler_param;
       GaussianFiller<Dtype> filler(filler_param);
@@ -844,7 +846,6 @@ TYPED_TEST(PoolingLayerTest, TestBatchGradientMax) {
       checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
           this->blob_top_vec_);
     }
-  }
 }
 
 

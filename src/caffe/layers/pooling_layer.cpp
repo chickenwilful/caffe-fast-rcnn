@@ -94,7 +94,13 @@ void PoolingLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   CHECK_EQ(4, bottom[0]->num_axes()) << "Input must have 4 axes, "
       << "corresponding to (num, channels, height, width)";
 
-  swap_bottom.Reshape(1, 1, 1, 1);
+    swap_bottom.Reshape(
+      bottom[0]->width(),
+      bottom[0]->height(),
+      bottom[0]->channels(),
+      bottom[0]->num()
+    );
+
   if (batch_pooling_) {
     // Switch channels for bottom
     swap_bottom.Reshape(
@@ -103,12 +109,6 @@ void PoolingLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       bottom[0]->channels(),
       bottom[0]->num()
     );
-    Dtype *swap_data = swap_bottom.mutable_cpu_data();
-    for (int n = 0; n < swap_bottom.num(); ++n) 
-      for(int c = 0; c < swap_bottom.channels(); ++c)
-        for(int h = 0; h < swap_bottom.height(); ++h)
-          for(int w = 0; w < swap_bottom.width(); ++w)
-            swap_data[swap_bottom.offset(n, c, h, w)] = bottom[0]->data_at(w, h, c, n);
 
     channels_ = swap_bottom.channels();
     height_ = swap_bottom.height();
@@ -185,6 +185,13 @@ template <typename Dtype>
 void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
 
+  Dtype *swap_data = swap_bottom.mutable_cpu_data();
+  for (int n = 0; n < swap_bottom.num(); ++n) 
+    for(int c = 0; c < swap_bottom.channels(); ++c)
+      for(int h = 0; h < swap_bottom.height(); ++h)
+        for(int w = 0; w < swap_bottom.width(); ++w)
+          swap_data[swap_bottom.offset(n, c, h, w)] = bottom[0]->data_at(w, h, c, n);
+        
   const Dtype* bottom_data = (batch_pooling_)? swap_bottom.cpu_data() : bottom[0]->cpu_data();
   
   Dtype* top_data = top[0]->mutable_cpu_data();
@@ -300,6 +307,7 @@ void PoolingLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
   // loop to save time, although this results in more codes.
   caffe_set(bottom[0]->count(), Dtype(0), bottom_diff);
   caffe_set(swap_bottom.count(), Dtype(0), swap_bottom_diff);
+  CHECK_EQ(bottom[0]->count(), swap_bottom.count());
 
   // We'll output the mask to top[1] if it's of size >1.
   const bool use_top_mask = top.size() > 1;
@@ -339,7 +347,13 @@ void PoolingLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
         for(int c = 0; c < channels_; ++c)
           for(int h = 0; h < height_; ++h)
             for(int w = 0; w < width_; ++w) 
-              bottom_diff[bottom[0]->offset(w, h, c, n)] = swap_bottom.diff_at(n, c, h, w);      
+              bottom_diff[bottom[0]->offset(w, h, c, n)] = swap_bottom.diff_at(n, c, h, w);    
+
+      for(int n = 0; n < swap_bottom.num(); ++n)
+        for(int c = 0; c < channels_; ++c)
+          for(int h = 0; h < height_; ++h)
+            for(int w = 0; w < width_; ++w) 
+              CHECK_EQ(bottom[0]->diff_at(w, h, c, n), swap_bottom.diff_at(n, c, h, w));                     
 
     } else {
 
