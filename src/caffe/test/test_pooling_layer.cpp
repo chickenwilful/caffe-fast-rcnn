@@ -369,7 +369,198 @@ class PoolingLayerTest : public MultiDeviceTest<TypeParam> {
       }
     }
   }
+
+  void TestBackwardBatch1() {
+    LayerParameter layer_param;
+    PoolingParameter *pooling_param = layer_param.mutable_pooling_param();
+    pooling_param -> set_kernel_h(1);
+    pooling_param -> set_kernel_w(1);
+    pooling_param -> set_batch_pooling(true);
+
+    FillerParameter filler_param;
+    GaussianFiller<Dtype> filler(filler_param);
+
+    for (int num = 2; num < 5; ++num) {
+      for(int channels = 5; channels < 10; ++channels) {
+        blob_bottom_ -> Reshape(num, channels, 1, 1);
+        filler.Fill(this->blob_bottom_);
+        
+        PoolingLayer<Dtype> layer(layer_param);
+        layer.SetUp(blob_bottom_vec_, blob_top_vec_);
+        EXPECT_EQ(blob_top_->num(), 1);
+        EXPECT_EQ(blob_top_->channels(), 1);
+        EXPECT_EQ(blob_top_->height(), channels);
+        EXPECT_EQ(blob_top_->width(), 1);
+        layer.Forward(blob_bottom_vec_, blob_top_vec_);
+
+        Dtype *m_top_diff = blob_top_->mutable_cpu_diff();
+        for(int i = 0; i < blob_top_->count(); i++)
+          m_top_diff[i] = rand() % 100;
+
+        vector<bool> propagate_down(blob_bottom_vec_.size(), true);
+        layer.Backward(blob_top_vec_, propagate_down, blob_bottom_vec_);
+        const Dtype* bottom_data = blob_bottom_->cpu_data();
+        const Dtype* top_data = blob_top_->cpu_data();
+        const Dtype* bottom_diff = blob_bottom_->cpu_diff();
+        const Dtype* top_diff = blob_top_->cpu_diff();
+
+        for(int c = 0; c < channels; ++c) {
+          for(int n = 0; n < num; ++n) 
+            if (bottom_data[channels * n + c] == top_data[c]) {
+              EXPECT_EQ(bottom_diff[channels * n + c], top_diff[c]);
+            } else {
+              EXPECT_EQ(bottom_diff[channels * n + c], 0);
+            }
+        }
+      }
+    }
+  }
+
+  void TestForwardBatch1() {
+    LayerParameter layer_param;
+    PoolingParameter *pooling_param = layer_param.mutable_pooling_param();
+    pooling_param -> set_kernel_h(1);
+    pooling_param -> set_kernel_w(1);
+    pooling_param -> set_batch_pooling(true);
+
+    FillerParameter filler_param;
+    GaussianFiller<Dtype> filler(filler_param);
+
+    for (int num = 2; num < 5; ++num) {
+      for(int channels = 5; channels < 10; ++channels) {
+        blob_bottom_ -> Reshape(num, channels, 1, 1);
+        filler.Fill(this->blob_bottom_);
+        
+        PoolingLayer<Dtype> layer(layer_param);
+        layer.SetUp(blob_bottom_vec_, blob_top_vec_);
+        EXPECT_EQ(blob_top_->num(), 1);
+        EXPECT_EQ(blob_top_->channels(), 1);
+        EXPECT_EQ(blob_top_->height(), channels);
+        EXPECT_EQ(blob_top_->width(), 1);
+        layer.Forward(blob_bottom_vec_, blob_top_vec_);
+
+        const Dtype* bottom_data = blob_bottom_->cpu_data();
+        const Dtype* top_data = blob_top_->cpu_data();
+        for(int c = 0; c < channels; ++c) {
+          for(int n = 0; n < num; ++n)
+            EXPECT_LE(bottom_data[channels * n + c], top_data[c]);
+        }
+      }
+    }
+  }
+
+  void TestBackwardBatch() {
+    LayerParameter layer_param;
+    PoolingParameter *pooling_param = layer_param.mutable_pooling_param();
+    pooling_param -> set_kernel_h(1);
+    pooling_param -> set_kernel_w(1);
+    pooling_param -> set_batch_pooling(true);
+
+    const int num = 2;
+    const int channels = 5;
+    blob_bottom_ -> Reshape(num, channels, 1, 1);
+    //Input: [1 2 3 4 5]
+    //       [4 1 2 6 2]
+    vector<int> data; data.clear();
+    data.push_back(1);
+    data.push_back(2);
+    data.push_back(3);
+    data.push_back(4);
+    data.push_back(5);
+    data.push_back(4);
+    data.push_back(1);
+    data.push_back(2);
+    data.push_back(6);
+    data.push_back(2);
+    for(int i = 0; i < 10; i++)
+      blob_bottom_ -> mutable_cpu_data()[i] = data[i];
+
+    PoolingLayer<Dtype> layer(layer_param);
+    layer.SetUp(blob_bottom_vec_, blob_top_vec_);
+    layer.Forward(blob_bottom_vec_, blob_top_vec_);
+
+    Dtype *m_top_diff = blob_top_->mutable_cpu_diff();
+    for(int i = 0; i < blob_top_->count(); i++)
+      m_top_diff[i] = rand() % 100;
+
+    vector<bool> propagate_down(blob_bottom_vec_.size(), true);
+    layer.Backward(blob_top_vec_, propagate_down, blob_bottom_vec_);
+
+    data.clear();
+    data.push_back(0);
+    data.push_back(m_top_diff[1]);
+    data.push_back(m_top_diff[2]);
+    data.push_back(0);
+    data.push_back(m_top_diff[4]);
+    data.push_back(m_top_diff[0]);
+    data.push_back(0);
+    data.push_back(0);
+    data.push_back(m_top_diff[3]);
+    data.push_back(0);
+
+    for(int i = 0; i < 10; i++)
+      EXPECT_EQ(blob_bottom_->cpu_diff()[i], data[i]);
+  }
+
+  void TestForwardBatch() {
+  // Test for 2 x 5 x 1 x 1 input
+    LayerParameter layer_param;
+    PoolingParameter *pooling_param = layer_param.mutable_pooling_param();
+    pooling_param -> set_kernel_h(1);
+    pooling_param -> set_kernel_w(1);
+    pooling_param -> set_batch_pooling(true);
+
+    const int num = 2;
+    const int channels = 5;
+    blob_bottom_ -> Reshape(num, channels, 1, 1);
+    //Input: [1 2 3 4 5]
+    //       [4 1 2 6 2]
+    vector<int> data; data.clear();
+    data.push_back(1);
+    data.push_back(2);
+    data.push_back(3);
+    data.push_back(4);
+    data.push_back(5);
+    data.push_back(4);
+    data.push_back(1);
+    data.push_back(2);
+    data.push_back(6);
+    data.push_back(2);
+    for(int i = 0; i < 10; i++)
+      blob_bottom_ -> mutable_cpu_data()[i] = data[i];
+
+    PoolingLayer<Dtype> layer(layer_param);
+    layer.SetUp(blob_bottom_vec_, blob_top_vec_);
+    EXPECT_EQ(blob_top_->num(), 1);
+    EXPECT_EQ(blob_top_->channels(), 1);
+    EXPECT_EQ(blob_top_->height(), channels);
+    EXPECT_EQ(blob_top_->width(), 1);
+    if (blob_top_vec_.size() > 1) {
+      EXPECT_EQ(blob_top_mask_->num(), 1);
+      EXPECT_EQ(blob_top_mask_->channels(), 1);
+      EXPECT_EQ(blob_top_mask_->height(), channels);
+      EXPECT_EQ(blob_top_mask_->width(), 1);
+    }
+    layer.Forward(blob_bottom_vec_, blob_top_vec_);
+    // Expected output (1 x 1 x 5 x 1)
+    //     [4 2 3 6 5]
+    data.clear();
+    data.push_back(4);
+    data.push_back(2);
+    data.push_back(3);
+    data.push_back(6);
+    data.push_back(5);
+
+    for(int i = 0; i < 5; i++)
+      EXPECT_EQ(blob_top_->cpu_data()[i], data[i]);
+
+    if (blob_top_vec_.size() > 1) {
+      for(int i = 0; i < 5; i++)
+        EXPECT_EQ(blob_top_mask_->cpu_data()[i],  data[i]);      
+    }
+  }
 };
+
 
 TYPED_TEST_CASE(PoolingLayerTest, TestDtypesAndDevices);
 
@@ -608,6 +799,58 @@ TYPED_TEST(PoolingLayerTest, TestGradientAvePadded) {
     }
   }
 }
+
+TYPED_TEST(PoolingLayerTest, TestSetupBatchPooling) {
+  typedef typename TypeParam::Dtype Dtype;
+  LayerParameter layer_param;
+  PoolingParameter* pooling_param = layer_param.mutable_pooling_param();
+  pooling_param->set_batch_pooling(true);
+  pooling_param->set_pool(PoolingParameter_PoolMethod_AVE);
+  pooling_param->set_kernel_size(1);
+  PoolingLayer<Dtype> layer(layer_param);
+  layer.SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
+  EXPECT_EQ(this->blob_top_->num(), this->blob_bottom_->width());
+  EXPECT_EQ(this->blob_top_->channels(), this->blob_bottom_->height());
+  EXPECT_EQ(this->blob_top_->height(), this->blob_bottom_->channels());
+  EXPECT_EQ(this->blob_top_->width(), 1);
+}
+
+
+TYPED_TEST(PoolingLayerTest, TestBatchForwardMax) {
+  this->TestForwardBatch();
+  this->TestForwardBatch1();
+}
+
+TYPED_TEST(PoolingLayerTest, TestBatchBackwardMax) {
+  this->TestBackwardBatch();
+  this->TestBackwardBatch1();
+}
+
+TYPED_TEST(PoolingLayerTest, TestBatchGradientMax) {
+  typedef typename TypeParam::Dtype Dtype;
+
+  LayerParameter layer_param;
+  PoolingParameter* pooling_param = layer_param.mutable_pooling_param();
+  pooling_param->set_kernel_h(1);
+  pooling_param->set_kernel_w(1);
+  pooling_param->set_pool(PoolingParameter_PoolMethod_MAX);
+  pooling_param->set_batch_pooling(true);
+  PoolingLayer<Dtype> layer(layer_param);
+  GradientChecker<Dtype> checker(1e-4, 1e-2);
+
+  for(int num = 2; num < 10; ++num)
+    for(int channels = 5; channels < 15; ++channels) {
+      this->blob_bottom_ -> Reshape(num, channels, 1, 1);
+      // fill the values
+      FillerParameter filler_param;
+      GaussianFiller<Dtype> filler(filler_param);
+      filler.Fill(this->blob_bottom_);
+
+      checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
+          this->blob_top_vec_);
+    }
+}
+
 
 #ifdef USE_CUDNN
 template <typename Dtype>

@@ -21,6 +21,8 @@ void CuDNNConvolutionLayer<Dtype>::LayerSetUp(
   // Initialize CUDA streams and cuDNN.
   stream_         = new cudaStream_t[this->group_ * CUDNN_STREAMS_PER_GROUP];
   handle_         = new cudnnHandle_t[this->group_ * CUDNN_STREAMS_PER_GROUP];
+  workspaceSizeInBytes = 0;
+  workspace = NULL;
 
   // Initialize algorithm arrays
   fwd_algo_       = new cudnnConvolutionFwdAlgo_t[bottom.size()];

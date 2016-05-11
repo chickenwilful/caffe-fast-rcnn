@@ -42,7 +42,7 @@ __global__ void LRNFillScale(const int nthreads, const Dtype* const in,
     // subtract only
     while (head < channels + post_pad) {
       if (head - size >= 0) {
-        accum_scale -= in_off[(head - size) * step]
+       accum_scale -= in_off[(head - size) * step]
                        * in_off[(head - size) * step];
       }
       scale_off[(head - post_pad) * step] = k + accum_scale * alpha_over_size;
@@ -143,13 +143,13 @@ __global__ void LRNComputeDiff(const int nthreads,
     Dtype accum_ratio = 0;
     // accumulate values
     while (head < post_pad && head < channels) {
-      accum_ratio += top_diff_off[head * step] * top_off[head * step] /
+     accum_ratio += top_diff_off[head * step] * top_off[head * step] /
           scale_off[head * step];
       ++head;
     }
     // both add and subtract
     while (head < channels) {
-      accum_ratio += top_diff_off[head * step] * top_off[head * step] /
+     accum_ratio += top_diff_off[head * step] * top_off[head * step] /
           scale_off[head * step];
       if (head - size >= 0) {
         accum_ratio -= top_diff_off[(head - size) * step] *
@@ -164,7 +164,7 @@ __global__ void LRNComputeDiff(const int nthreads,
     // subtract only
     while (head < channels + post_pad) {
       if (head - size >= 0) {
-        accum_ratio -= top_diff_off[(head - size) * step] *
+       accum_ratio -= top_diff_off[(head - size) * step] *
             top_off[(head - size) * step] / scale_off[(head - size) * step];
       }
       bottom_diff_off[(head - post_pad) * step] =

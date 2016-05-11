@@ -1,5 +1,6 @@
 import unittest
 import tempfile
+
 import os
 import six
 
@@ -50,7 +51,7 @@ class TestLayerWithParam(unittest.TestCase):
         x = 8
         self.net.blobs['data'].data[...] = x
         self.net.forward()
-        for y in self.net.blobs['mul2'].data.flat:
+       for y in self.net.blobs['mul2'].data.flat:
             self.assertEqual(y, 2 * 10 * x)
 
     def test_backward(self):

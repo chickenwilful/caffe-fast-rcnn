@@ -2,6 +2,8 @@
 #define CAFFE_PYTHON_LAYER_HPP_
 
 #include <boost/python.hpp>
+
+#include <string>
 #include <vector>
 
 #include "caffe/layer.hpp"
@@ -9,6 +11,20 @@
 namespace bp = boost::python;
 
 namespace caffe {
+
+#define PYTHON_LAYER_ERROR() { \
+  PyObject *petype, *pevalue, *petrace; \
+  PyErr_Fetch(&petype, &pevalue, &petrace); \
+  bp::object etype(bp::handle<>(bp::borrowed(petype))); \
+  bp::object evalue(bp::handle<>(bp::borrowed(bp::allow_null(pevalue)))); \
+  bp::object etrace(bp::handle<>(bp::borrowed(bp::allow_null(petrace)))); \
+  bp::object sio(bp::import("StringIO").attr("StringIO")()); \
+  bp::import("traceback").attr("print_exception")( \
+    etype, evalue, etrace, bp::object(), sio); \
+  LOG(INFO) << bp::extract<string>(sio.attr("getvalue")())(); \
+  PyErr_Restore(petype, pevalue, petrace); \
+  throw; \
+}
 
 template <typename Dtype>
 class PythonLayer : public Layer<Dtype> {
@@ -18,7 +34,7 @@ class PythonLayer : public Layer<Dtype> {
 
   virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-    // Disallow PythonLayer in MultiGPU training stage, due to GIL issues
+   // Disallow PythonLayer in MultiGPU training stage, due to GIL issues
     // Details: https://github.com/BVLC/caffe/issues/2936
     if (this->phase_ == TRAIN && Caffe::solver_count() > 1
         && !ShareInParallel()) {
@@ -31,7 +47,7 @@ class PythonLayer : public Layer<Dtype> {
   }
   virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-    self_.attr("reshape")(bottom, top);
+   self_.attr("reshape")(bottom, top);
   }
 
   virtual inline bool ShareInParallel() const {
@@ -43,7 +59,7 @@ class PythonLayer : public Layer<Dtype> {
  protected:
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-    self_.attr("forward")(bottom, top);
+   self_.attr("forward")(bottom, top);
   }
   virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {

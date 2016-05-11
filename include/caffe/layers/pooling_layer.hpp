@@ -51,8 +51,10 @@ class PoolingLayer : public Layer<Dtype> {
   int height_, width_;
   int pooled_height_, pooled_width_;
   bool global_pooling_;
+	bool batch_pooling_;
   Blob<Dtype> rand_idx_;
   Blob<int> max_idx_;
+  Blob<Dtype> swap_bottom;
 };
 
 }  // namespace caffe

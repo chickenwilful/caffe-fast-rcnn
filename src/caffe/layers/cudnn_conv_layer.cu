@@ -15,13 +15,57 @@ void CuDNNConvolutionLayer<Dtype>::Forward_gpu(
     const Dtype* bottom_data = bottom[i]->gpu_data();
     Dtype* top_data = top[i]->mutable_gpu_data();
 
+    size_t workspace_limit_bytes = this->kernel_h_ *
+                                   this->kernel_w_ *
+                                   this->channels_ *
+                                   sizeof(int) + 1;
+
     // Forward through cuDNN in parallel over groups.
     for (int g = 0; g < this->group_; g++) {
+      cudnnConvolutionFwdAlgo_t algo;
+
+      // pick the convolution algorithm
+      // TODO(shelhamer) this should be done during reshape
+      // TODO(shelhamer) the choice of automatic or manual algorithm picking
+      // should be exposed in proto
+      CUDNN_CHECK(cudnnGetConvolutionForwardAlgorithm(handle_[g],
+        bottom_descs_[i],
+        filter_desc_,
+        conv_descs_[i],
+        top_descs_[i],
+        CUDNN_CONVOLUTION_FWD_SPECIFY_WORKSPACE_LIMIT,
+        workspace_limit_bytes,  // memoryLimitInBytes,
+        &algo));
+
+      // get minimum size of the workspace needed for the desired algorithm
+      size_t workspaceSizeInBytes_temp = 0;
+
+      CUDNN_CHECK(cudnnGetConvolutionForwardWorkspaceSize(handle_[g],
+        bottom_descs_[i],
+        filter_desc_,
+        conv_descs_[i],
+        top_descs_[i],
+        algo,
+        &workspaceSizeInBytes_temp));
+
+      if (workspaceSizeInBytes_temp > workspaceSizeInBytes) {
+        workspaceSizeInBytes = workspaceSizeInBytes_temp;
+        // free the existing workspace and allocate a new (larger) one
+        cudaFree(this->workspace);
+        cudaError_t err = cudaMalloc(&(this->workspace), workspaceSizeInBytes);
+        if (err != cudaSuccess) {
+          // force zero memory path
+          algo = CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM;
+          workspace = NULL;
+          workspaceSizeInBytes = 0;
+        }
+      }
+
       // Filters.
       CUDNN_CHECK(cudnnConvolutionForward(handle_[g],
             cudnn::dataType<Dtype>::one,
             bottom_descs_[i], bottom_data + bottom_offset_ * g,
-            filter_desc_, weight + this->weight_offset_ * g,
+           filter_desc_, weight + this->weight_offset_ * g,
             conv_descs_[i],
             fwd_algo_[i], workspace[g], workspace_fwd_sizes_[i],
             cudnn::dataType<Dtype>::zero,
@@ -88,7 +132,7 @@ void CuDNNConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
               bottom_descs_[i], bottom_data + bottom_offset_ * g,
               top_descs_[i],    top_diff + top_offset_ * g,
               conv_descs_[i],
-              bwd_filter_algo_[i], workspace[1*this->group_ + g],
+             bwd_filter_algo_[i], workspace[1*this->group_ + g],
               workspace_bwd_filter_sizes_[i],
               cudnn::dataType<Dtype>::one,
               filter_desc_, weight_diff + this->weight_offset_ * g));
@@ -100,7 +144,7 @@ void CuDNNConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
           weight = this->blobs_[0]->gpu_data();
         }
         Dtype* bottom_diff = bottom[i]->mutable_gpu_diff();
-        CUDNN_CHECK(cudnnConvolutionBackwardData_v3(
+       CUDNN_CHECK(cudnnConvolutionBackwardData_v3(
               handle_[2*this->group_ + g],
               cudnn::dataType<Dtype>::one,
               filter_desc_, weight + this->weight_offset_ * g,
